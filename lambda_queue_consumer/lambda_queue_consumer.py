@@ -64,6 +64,12 @@ class LambdaQueueConsumer:
         return incoming_queue + '-' + endpoint[-1]
 
     @staticmethod
+    def get_dead_letter_queue_for_outgoing(subscriber, dead_letter_queue_for_incoming):
+        endpoint = subscriber['SubscriptionArn'].split(':')
+
+        return dead_letter_queue_for_incoming + '-' + endpoint[-1]
+
+    @staticmethod
     def get_outgoing_topic():
         """
         Get the topic for outgoing data from Lambda queue consumer
@@ -89,9 +95,25 @@ class LambdaQueueConsumer:
             )['Messages']
         return return_set
 
-    def notify_outgoing_subscribers(self, queue):
-        # TODO
-        pass
+    def notify_outgoing_subscribers(self, outgoing_queue, dead_letter_queue_for_outgoing):
+        """
+        Send notification with information about the outgoing queue and its dead letter queue
+        :param outgoing_queue: outgoing queue
+        :param dead_letter_queue_for_outgoing: dead letter queue for outgoing data
+        """
+        notification_message = "{'queue': '"\
+                               + outgoing_queue\
+                               + "','dead-letter-queue': '"\
+                               + dead_letter_queue_for_outgoing\
+                               + "'}"
+
+        topic_object = self.sns_client.create_topic(
+            Name=self.get_outgoing_topic()
+        )
+        self.sns_client.publish(
+            TopicArn=topic_object['TopicArn'],
+            Message=notification_message
+        )
 
     def acknowledge_data_entry(self, queue, data_entry):
         """
@@ -106,39 +128,25 @@ class LambdaQueueConsumer:
         )
         return response
 
-    def redirect_data_to_subscriber(self, subscriber, incoming_queue, data_entry):
+    def redirect_data_to_subscriber(self, subscriber, incoming_queue, dead_letter_queue_for_incoming, data_entry):
         """
         Sends data fetched from the incoming queue to the subscriber and data type specific queues
         :param subscriber: Subscriber to redirect data to
         :param incoming_queue: Queue from where Lambda fetched the data
+        :param dead_letter_queue_for_incoming: Queue for letters that the Lambda consumer could not handle
         :param data_entry: Data entry to be forwarded
         :return: 
         """
         outgoing_queue = self.get_outgoing_queue(subscriber, incoming_queue)
+        dead_letter_queue_for_outgoing = self.get_dead_letter_queue_for_outgoing(
+            subscriber, dead_letter_queue_for_incoming)
         outgoing_queue_url = self.sqs_client.create_queue(
             QueueName=outgoing_queue
         )
         self.sqs_client.send_message(
-            QueueUrl=outgoing_queue_url,
+            QueueUrl=outgoing_queue_url['QueueUrl'],
             MessageBody=data_entry['Body']
         )
-
-        notification_message = "{\
-            'queue': outgoing_queue,\
-            'dead-letter-queue': 'abacus-dead-letter-queue-' + os.environ.get('ORG').lower()\
-        }"
-
-        topic_object = self.sns_client.create_topic(
-            Name=self.get_outgoing_topic()
-        )
-        self.sns_client.publish(
-            TopicArn=topic_object['TopicArn'],
-            Message=notification_message
-
-        )
-    
-        pass
-        # TODO
 
     def distribute_data(self, event):
         """
@@ -146,15 +154,18 @@ class LambdaQueueConsumer:
         :param event: Includes the queue name of the queue that has new data available
         :return:
         """
-
         subscriptions = self.get_outgoing_subscriptions(self.get_outgoing_topic())
 
         incoming_queue = event['queue']
+        dead_letter_queue_for_incoming = event['dead-letter-queue']
         incoming_data = self.get_incoming_data(incoming_queue)
         for data_entry in incoming_data:
             for subscriber in subscriptions:
-                self.redirect_data_to_subscriber(subscriber, incoming_queue, data_entry)
-            self.notify_outgoing_subscribers(incoming_queue)
+                self.redirect_data_to_subscriber(subscriber, incoming_queue, dead_letter_queue_for_incoming, data_entry)
+                outgoing_queue = self.get_outgoing_queue(subscriber, incoming_queue)
+                dead_letter_queue_for_outgoing = self.get_dead_letter_queue_for_outgoing(
+                    subscriber, dead_letter_queue_for_incoming)
+                self.notify_outgoing_subscribers(outgoing_queue, dead_letter_queue_for_outgoing)
             self.acknowledge_data_entry(incoming_queue, data_entry)
 
 
@@ -168,4 +179,4 @@ def lambda_handler(event, context):
     consumer = LambdaQueueConsumer()
     consumer.distribute_data(event)
 
-    return 'Hello from Lambda'
+    return context
