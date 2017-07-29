@@ -59,8 +59,9 @@ class LambdaQueueConsumer:
 
     @staticmethod
     def get_outgoing_queue(subscriber, incoming_queue):
+        endpoint = subscriber['SubscriptionArn'].split(':')
 
-        return incoming_queue + '-' + subscriber['Endpoint']
+        return incoming_queue + '-' + endpoint[-1]
 
     @staticmethod
     def get_outgoing_topic():
@@ -114,15 +115,26 @@ class LambdaQueueConsumer:
         :return: 
         """
         outgoing_queue = self.get_outgoing_queue(subscriber, incoming_queue)
-        self.sqs_client.create_queue(
+        outgoing_queue_url = self.sqs_client.create_queue(
             QueueName=outgoing_queue
         )
         self.sqs_client.send_message(
-            QueueUrl=self.handler.get_queue_url(outgoing_queue),
-            MessageBody=data_entry['data']
+            QueueUrl=outgoing_queue_url,
+            MessageBody=data_entry['Body']
         )
-        self.sns_client.create_topic(
-            Name='get_outgoing_topic_'
+
+        notification_message = "{\
+            'queue': outgoing_queue,\
+            'dead-letter-queue': 'abacus-dead-letter-queue-' + os.environ.get('ORG').lower()\
+        }"
+
+        topic_object = self.sns_client.create_topic(
+            Name=self.get_outgoing_topic()
+        )
+        self.sns_client.publish(
+            TopicArn=topic_object['TopicArn'],
+            Message=notification_message
+
         )
     
         pass
