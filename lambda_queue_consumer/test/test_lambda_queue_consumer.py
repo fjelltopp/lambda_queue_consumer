@@ -2,6 +2,7 @@
 Lambda Queue Consumer Test
 """
 
+import json
 from pprint import pprint
 import unittest
 from unittest.mock import MagicMock, call
@@ -25,10 +26,10 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         })
 
         self.consumer.sqs_client.create_queue = MagicMock(return_value={
-            'QueueUrl': 'aws:test-queue-url'
+            'QueueUrl': 'aws:nest-test-queue-url'
         })
         self.consumer.sqs_client.get_queue_url = MagicMock(return_value={
-            'QueueUrl': 'nest-test-queue-url'
+            'QueueUrl': 'aws:nest-test-queue-url'
         })
         self.consumer.sqs_client.send_message = MagicMock(return_value={
             'MD5OfMessageBody': 'test-md5',
@@ -61,7 +62,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         self.consumer.sqs_client.delete_message = MagicMock(return_value=None)
 
         self.consumer.sns_client.create_topic = MagicMock(return_value={
-            'TopicArn': 'arn:aws:sns:eu-west-1:458315597956:nest-test-topic'
+            'TopicArn': 'arn:aws:sns:eu-west-1:test-account:nest-test-topic'
         })
         self.consumer.sns_client.publish = MagicMock(return_value={
             'MessageId': 'test-message-id'
@@ -74,7 +75,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
                     'Owner': 'test-owner',
                     'Protocol': 'email',
                     'Endpoint': 'soppela.jyri@gmail.com',
-                    'TopicArn': 'arn:aws:sns:eu-west-1:458315597956:nest-test-notifier'
+                    'TopicArn': 'arn:aws:sns:eu-west-1:test-account:nest-test-topic'
                 },
                 {
                     'SubscriptionArn':
@@ -82,21 +83,20 @@ class LambdaQueueConsumerTest(unittest.TestCase):
                     'Owner': 'test-owner',
                     'Protocol': 'email',
                     'Endpoint': 'soppela.jyri@gmail.com',
-                    'TopicArn': 'arn:aws:sns:eu-west-1:458315597956:nest-test-notifier'
+                    'TopicArn': 'arn:aws:sns:eu-west-1:test-account:nest-test-topic'
                 },
             ]
         })
 
+        self.consumer.distribute_data(self.event)
+
     def tearDown(self):
         pass
 
-    def test_message_distribution(self):
-        self.consumer.distribute_data(self.event)
-
-        # Test account operations
+    def test_account_operations(self):
         self.assertTrue(self.consumer.sts_client.get_caller_identity.called)
 
-        # Test outgoing queue creation
+    def test_outgoing_queue_operations(self):
         self.assertTrue(self.consumer.sqs_client.create_queue.called)
         self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
@@ -110,16 +110,75 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         # Test queue URL fetching
         self.assertTrue(self.consumer.sqs_client.get_queue_url.called)
 
-        # Test queue reading
+    def test_incoming_queue_reading(self):
         self.assertTrue(self.consumer.sqs_client.receive_message.called)
 
         # Test acknowledging receiving messages from queue
         self.assertTrue(self.consumer.sqs_client.delete_message.called)
+        self.assertEqual(self.consumer.sqs_client.delete_message.call_count,
+                         len(self.consumer.sqs_client.receive_message.return_value['Messages']))
+        delete_message_calls = [
+            call(
+                QueueUrl='aws:nest-test-queue-url',
+                ReceiptHandle='test-receipt-handle-1'
+            ),
+            call(
+                QueueUrl='aws:nest-test-queue-url',
+                ReceiptHandle='test-receipt-handle-2'
+            )
+        ]
+        self.consumer.sqs_client.delete_message.assert_has_calls(delete_message_calls, any_order=True)
 
-        # Test message sending
+    def test_sending_messages_to_outgoing_queues(self):
         self.assertTrue(self.consumer.sqs_client.send_message.called)
+        self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
+                         len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
+                         len(self.consumer.sqs_client.receive_message.return_value['Messages']))
+        send_message_calls = [
+            call(
+                QueueUrl='aws:nest-test-queue-url',
+                MessageBody='test-body-1'
+            ),
+            call(
+                QueueUrl='aws:nest-test-queue-url',
+                MessageBody='test-body-2'
+            )
+        ]
+        self.consumer.sqs_client.send_message.assert_has_calls(send_message_calls, any_order=True)
 
-        # Test notification operations
+    def test_notification_operations(self):
+        # Check that the outgoing queue notification topics are created
         self.assertTrue(self.consumer.sns_client.create_topic.called)
+
+        create_topic_calls = [
+            call(
+                Name='nest-outgoing-topic-demo'
+            )
+        ]
+        self.consumer.sns_client.create_topic.assert_has_calls(create_topic_calls, any_order=True)
+
         self.assertTrue(self.consumer.sns_client.list_subscriptions_by_topic.called)
+
         self.assertTrue(self.consumer.sns_client.publish.called)
+        self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
+                         len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
+                         len(self.consumer.sqs_client.receive_message.return_value['Messages']))
+
+        publish_calls = [
+            call(
+                TopicArn='arn:aws:sns:eu-west-1:test-account:nest-test-topic',
+                Message="{"\
+                        + "'queue': 'nest-test-queue-0a314486-a412-40c3-ae62-8c1b00btest1',"\
+                        + "'dead-letter-queue': 'nest-test-dead-letter-queue-0a314486-a412-40c3-ae62-8c1b00btest1'"\
+                        "}"
+            ),
+            call(
+                TopicArn='arn:aws:sns:eu-west-1:test-account:nest-test-topic',
+                Message="{"\
+                        + "'queue': 'nest-test-queue-0a314486-a412-40c3-ae62-8c1b00btest2',"\
+                        + "'dead-letter-queue': 'nest-test-dead-letter-queue-0a314486-a412-40c3-ae62-8c1b00btest2'"\
+                        "}"
+            )
+        ]
+
+        self.consumer.sns_client.publish.assert_has_calls(publish_calls, any_order=True)
