@@ -69,13 +69,15 @@ class LambdaQueueConsumer:
 
         return dead_letter_queue_for_incoming + '-' + endpoint[-1]
 
-    @staticmethod
-    def get_outgoing_topic():
+    def get_outgoing_topic(self):
         """
         Get the topic for outgoing data from Lambda queue consumer
-        :return: Topic name where lambda publishes notifications about new data
+        :return: Topic object where lambda publishes notifications about new data
         """
-        return 'nest-outgoing-topic-' + os.environ['ORG'].lower()
+        topic = self.sns_client.create_topic(
+            Name='nest-outgoing-topic-' + os.environ['ORG'].lower()
+        )
+        return topic
 
     def get_incoming_data(self, queue_name, n=1):
         """
@@ -107,11 +109,9 @@ class LambdaQueueConsumer:
                                + dead_letter_queue_for_outgoing\
                                + "'}"
 
-        topic_object = self.sns_client.create_topic(
-            Name=self.get_outgoing_topic()
-        )
+        topic = self.get_outgoing_topic()
         self.sns_client.publish(
-            TopicArn=topic_object['TopicArn'],
+            TopicArn=topic['TopicArn'],
             Message=notification_message
         )
 
@@ -154,7 +154,8 @@ class LambdaQueueConsumer:
         :param event: Includes the queue name of the queue that has new data available
         :return:
         """
-        subscriptions = self.get_outgoing_subscriptions(self.get_outgoing_topic())
+
+        subscriptions = self.get_outgoing_subscriptions(self.get_outgoing_topic()['TopicArn'])
 
         incoming_queue = event['queue']
         dead_letter_queue_for_incoming = event['dead-letter-queue']
