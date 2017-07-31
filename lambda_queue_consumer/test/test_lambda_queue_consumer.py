@@ -2,8 +2,6 @@
 Lambda Queue Consumer Test
 """
 
-import json
-from pprint import pprint
 import unittest
 from unittest.mock import MagicMock, call
 import lambda_queue_consumer.lambda_queue_consumer
