@@ -92,9 +92,11 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         pass
 
     def test_account_operations(self):
+        # Test account identity operation
         self.assertTrue(self.consumer.sts_client.get_caller_identity.called)
 
     def test_outgoing_queue_operations(self):
+        # Test queue creation
         self.assertTrue(self.consumer.sqs_client.create_queue.called)
         self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
@@ -109,6 +111,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         self.assertTrue(self.consumer.sqs_client.get_queue_url.called)
 
     def test_incoming_queue_reading(self):
+        # Test reading form queue
         self.assertTrue(self.consumer.sqs_client.receive_message.called)
 
         # Test acknowledging receiving messages from queue
@@ -128,6 +131,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         self.consumer.sqs_client.delete_message.assert_has_calls(delete_message_calls, any_order=True)
 
     def test_sending_messages_to_outgoing_queues(self):
+        # Test sending messages out
         self.assertTrue(self.consumer.sqs_client.send_message.called)
         self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
@@ -155,10 +159,11 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         ]
         self.consumer.sns_client.create_topic.assert_has_calls(create_topic_calls, any_order=True)
 
+        # Test listing subscriptions
         self.assertTrue(self.consumer.sns_client.list_subscriptions_by_topic.called)
 
         self.assertTrue(self.consumer.sns_client.publish.called)
-        self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
+        self.assertEqual(self.consumer.sns_client.publish.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
                          len(self.consumer.sqs_client.receive_message.return_value['Messages']))
 
