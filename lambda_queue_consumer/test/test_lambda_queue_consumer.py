@@ -105,12 +105,14 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         ]
         self.consumer.sqs_client.create_queue.assert_has_calls(create_queue_calls, any_order=True)
 
+    def test_queue_url_generation(self):
         self.assertTrue(self.consumer.sqs_client.get_queue_url.called)
 
     def test_incoming_queue_reading(self):
         # Test reading messages from incoming data queue
         self.assertTrue(self.consumer.sqs_client.receive_message.called)
 
+    def test_message_acknowledging(self):
         # Test acknowledging and deleting messages from incoming queue once they are consumed
         self.assertTrue(self.consumer.sqs_client.delete_message.called)
         self.assertEqual(self.consumer.sqs_client.delete_message.call_count,
@@ -145,7 +147,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         ]
         self.consumer.sqs_client.send_message.assert_has_calls(send_message_calls, any_order=True)
 
-    def test_notification_operations(self):
+    def test_topic_creation(self):
         # Check that the outgoing queue notification topics are created
         self.assertTrue(self.consumer.sns_client.create_topic.called)
 
@@ -156,9 +158,12 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         ]
         self.consumer.sns_client.create_topic.assert_has_calls(create_topic_calls, any_order=True)
 
+    def test_subscription_listing(self):
         # Test listing subscriptions of the outgoing topics
         self.assertTrue(self.consumer.sns_client.list_subscriptions_by_topic.called)
 
+    def test_publishing_to_topic(self):
+        # Test publishing the data received from the incoming pipeline into the subscribers of outgoing pipeline
         self.assertTrue(self.consumer.sns_client.publish.called)
         self.assertEqual(self.consumer.sns_client.publish.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
