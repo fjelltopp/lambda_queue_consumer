@@ -1,11 +1,13 @@
 language: python
 dist:
-   - trusty
+- trusty
 python:
-  - '3.6'
+- '3.6'
 env:
 - ORG='demo'
-
 install:
- - pip install -r requirements.txt
+- pip install -r requirements.txt
 script: nosetests -v
+notifications:
+  slack:
+    secure: yq1OgwtTTn4siD7tInGilU4Mg2xFT1NSA3lLyTVsesbKWfYtnCdb/X6OuuqnlZYAMWfQul2MtcWNfFr5guzeKSERHmrCIW3pLuahGUA6VjQg86wLDeBwXtJSxV5ArI/cECAyqvO6RxqXd0lOCbR6OfSq5cYcGBYnCQOkyWuwva1UhO5sLjQtXXbA5X3cHr75lRSZBiNuLum/4AnPtk+GajovV6QSywPAOHaQ+EFDxEjwS67iL5MUaWFzBTpYZSDicFDV8R9tby+82KsPwQif0jUgxiClTvlUHmxE0w2x6IMX+qUeIySF0kdawYWwvBPjP0JYioW8iRWu90/AkwCmjZ+/Dpbfq/XG8YcB/KNtY9gOr528RoKXu/ceQpl5nOsv/8dbywKpaWjwCeEQEwTblVzeecLieGb+yYgF6cQkog3aLHhu9oUf+pMWIOA+1XC/VEQmanK/O/oK5VhtODS/rYdZ1WFwAtrp76RjvyY06PS2OV3zd/5WHsbvj8dVFYvQVRy1mmURE1YWqnpemQMKxaWLifWMQnx5Wi7LoAYIas+Pzm77z0F7jrbiSHpuqNGR1H94r4/ViXgM+B8LrbTdKdKNlVrPTq6qcAKQKVJswhIi1mt3m8qXeEySmkyE2uxVwu0X94mlvUmCZwQgcPnckEMD8aiE0OmFuBKWeRi6I2Y=
