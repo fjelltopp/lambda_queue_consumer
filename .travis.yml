@@ -8,6 +8,4 @@ env:
 
 install:
  - pip install -r requirements.txt
- - git clone https://github.com/meerkat-code/lambda_queue_consumer.git
- - cd lambda_queue_consumer
 script: nosetests -v
