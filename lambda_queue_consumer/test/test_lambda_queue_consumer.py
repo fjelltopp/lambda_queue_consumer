@@ -88,15 +88,13 @@ class LambdaQueueConsumerTest(unittest.TestCase):
 
         self.consumer.distribute_data(self.event)
 
-    def tearDown(self):
-        pass
-
     def test_account_operations(self):
-        # Test account identity operation
+        # Test account identity operation that is used to get resource ARNs tied to the account
         self.assertTrue(self.consumer.sts_client.get_caller_identity.called)
 
     def test_outgoing_queue_operations(self):
-        # Test queue creation
+        # Test creating queues for endpoint consumers to consume.
+        # Lambda consumer forwards incoming data to these queues.
         self.assertTrue(self.consumer.sqs_client.create_queue.called)
         self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
@@ -107,14 +105,13 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         ]
         self.consumer.sqs_client.create_queue.assert_has_calls(create_queue_calls, any_order=True)
 
-        # Test queue URL fetching
         self.assertTrue(self.consumer.sqs_client.get_queue_url.called)
 
     def test_incoming_queue_reading(self):
-        # Test reading form queue
+        # Test reading messages from incoming data queue
         self.assertTrue(self.consumer.sqs_client.receive_message.called)
 
-        # Test acknowledging receiving messages from queue
+        # Test acknowledging and deleting messages from incoming queue once they are consumed
         self.assertTrue(self.consumer.sqs_client.delete_message.called)
         self.assertEqual(self.consumer.sqs_client.delete_message.call_count,
                          len(self.consumer.sqs_client.receive_message.return_value['Messages']))
@@ -131,7 +128,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         self.consumer.sqs_client.delete_message.assert_has_calls(delete_message_calls, any_order=True)
 
     def test_sending_messages_to_outgoing_queues(self):
-        # Test sending messages out
+        # Test sending messages out to endpoint queues.
         self.assertTrue(self.consumer.sqs_client.send_message.called)
         self.assertEqual(self.consumer.sqs_client.create_queue.call_count,
                          len(self.consumer.sns_client.list_subscriptions_by_topic.return_value['Subscriptions']) *
@@ -159,7 +156,7 @@ class LambdaQueueConsumerTest(unittest.TestCase):
         ]
         self.consumer.sns_client.create_topic.assert_has_calls(create_topic_calls, any_order=True)
 
-        # Test listing subscriptions
+        # Test listing subscriptions of the outgoing topics
         self.assertTrue(self.consumer.sns_client.list_subscriptions_by_topic.called)
 
         self.assertTrue(self.consumer.sns_client.publish.called)
