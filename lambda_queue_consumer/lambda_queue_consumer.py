@@ -1,9 +1,9 @@
 import boto3
 import os
+import json
 
 
 class LambdaQueueConsumer:
-
     def __init__(self):
         region_name = 'eu-west-1'
         self.sns_client = boto3.client('sns', region_name=region_name)
@@ -13,7 +13,7 @@ class LambdaQueueConsumer:
     def get_account_id(self):
         """
         Returns AWS account ID
-    
+
         Returns:\n
             account ID for the configured AWS user\n
         """
@@ -23,7 +23,7 @@ class LambdaQueueConsumer:
     def get_queue_url(self, queue_name):
         """
         Creates a queue URL based on given queue name
-    
+
         Returns:\n
             URL for the given queue\n
         """
@@ -32,7 +32,7 @@ class LambdaQueueConsumer:
             QueueOwnerAWSAccountId=self.get_account_id()
         )
         return response['QueueUrl']
-    
+
     def get_outgoing_subscriptions(self, topic_arn):
         """
         Get all subscribers that have subscribed to the output of the Lambda function
@@ -45,7 +45,7 @@ class LambdaQueueConsumer:
         )
         subscriptions += response['Subscriptions']
         next_token = response.get('NextToken', None)
-    
+
         # SNS returns at most 100 subscriptions, concatenate them if needed
         while next_token is not None:
             response = self.sns_client.list_subscriptions_by_topic(
@@ -54,7 +54,7 @@ class LambdaQueueConsumer:
             )
             next_token = response.get('NextToken', None)
             subscriptions += response['Subscriptions']
-    
+
         return subscriptions
 
     @staticmethod
@@ -88,12 +88,12 @@ class LambdaQueueConsumer:
         """
         return_set = []
         # TODO empty the whole queue
-    
+
         for i in range(0, n):
             return_set += (self.sqs_client.receive_message(
                 QueueUrl=self.get_queue_url(queue_name),
                 MaxNumberOfMessages=10
-                )
+            )
             )['Messages']
         return return_set
 
@@ -103,10 +103,10 @@ class LambdaQueueConsumer:
         :param outgoing_queue: outgoing queue
         :param dead_letter_queue_for_outgoing: dead letter queue for outgoing data
         """
-        notification_message = "{'queue': '"\
-                               + outgoing_queue\
-                               + "','dead-letter-queue': '"\
-                               + dead_letter_queue_for_outgoing\
+        notification_message = "{'queue': '" \
+                               + outgoing_queue \
+                               + "','dead-letter-queue': '" \
+                               + dead_letter_queue_for_outgoing \
                                + "'}"
 
         topic = self.get_outgoing_topic()
@@ -135,7 +135,7 @@ class LambdaQueueConsumer:
         :param incoming_queue: Queue from where Lambda fetched the data
         :param dead_letter_queue_for_incoming: Queue for letters that the Lambda consumer could not handle
         :param data_entry: Data entry to be forwarded
-        :return: 
+        :return:
         """
         outgoing_queue = self.get_outgoing_queue(subscriber, incoming_queue)
         dead_letter_queue_for_outgoing = self.get_dead_letter_queue_for_outgoing(
@@ -148,17 +148,17 @@ class LambdaQueueConsumer:
             MessageBody=data_entry['Body']
         )
 
-    def distribute_data(self, event):
+    def distribute_data(self, message):
         """
         Main function to distribute data from incoming queue to subscriber queues
-        :param event: Includes the queue name of the queue that has new data available
+        :param message: Includes the queue name of the queue that has new data available
         :return:
         """
 
         subscriptions = self.get_outgoing_subscriptions(self.get_outgoing_topic()['TopicArn'])
 
-        incoming_queue = event['queue']
-        dead_letter_queue_for_incoming = event['dead-letter-queue']
+        incoming_queue = message['queue']
+        dead_letter_queue_for_incoming = message['dead-letter-queue']
         incoming_data = self.get_incoming_data(incoming_queue)
         for data_entry in incoming_data:
             for subscriber in subscriptions:
@@ -178,6 +178,8 @@ def lambda_handler(event, context):
     :return: returns information about where the data was forwarded to
     """
     consumer = LambdaQueueConsumer()
-    consumer.distribute_data(event)
+    print(event)
+    message = json.loads(event['Records'][0]['Sns']['Message'])
+    consumer.distribute_data(message)
 
-    return context
+    return 'Lambda run for ' + os.environ['ORG']
